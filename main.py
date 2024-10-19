@@ -8,6 +8,11 @@ import openai
 import PyPDF2
 from langchain.embeddings.openai import OpenAIEmbeddings
 
+from flask import Flask, request, jsonify
+
+# Initialize Flask app
+app = Flask(__name__)
+
 # Access the OpenAI API key from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -144,3 +149,39 @@ if __name__ == "__main__":
         # Generate chatbot response
         response = generate_response(user_input, index, text_chunks)
         print(f"Bot: {response}")
+
+# Route to handle API requests
+@app.route('/ask', methods=['POST'])
+def ask_question():
+    data = request.get_json()
+    question = data.get('question')
+
+    if not question:
+        return jsonify({'answer': 'Invalid input, please ask a question.'})
+
+    try:
+        # Generate chatbot response
+        answer = generate_response(question, index, text_chunks)
+        return jsonify({'answer': answer})
+    except Exception as e:
+        return jsonify({'answer': f'Error: {str(e)}'})
+
+# Run the Flask app
+if __name__ == "__main__":
+    # Ensure cache directory exists
+    cache_dir = "embedding_cache"
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
+    # Process the PDF and create the index
+    pdf_path = "patent_basics.pdf"  # Replace with your PDF path
+    print("Processing PDF...")
+    pdf_text = extract_text_from_pdf(pdf_path, page_limit=500)  # Adjust page limit as needed
+    text_chunks = chunk_text(pdf_text)
+    print(f"Processing {len(text_chunks)} chunks...")
+    embeddings = vectorize_text_chunks(text_chunks)
+    index = create_faiss_index(embeddings)
+    print("PDF processed successfully!")
+
+    # Start the Flask server
+    app.run(host='0.0.0.0', port=8080, debug=True)
